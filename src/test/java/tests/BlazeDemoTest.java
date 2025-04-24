@@ -5,6 +5,9 @@ import io.restassured.response.Response;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import static io.restassured.RestAssured.given;
 
 public class BlazeDemoTest {
@@ -24,23 +27,33 @@ public class BlazeDemoTest {
                 .formParam("toPort", "London")
                 .when()
                 .post("/reserve.php");
-        Assert.assertTrue(flightsPage.asString().contains("Flights from Boston to London"));
+
+        String flightsHtml = flightsPage.asString();
+        Assert.assertTrue(flightsHtml.contains("Flights from Boston to London"));
         System.out.println("Flight list retrieved.");
 
-        // 3. Extract lowest cost flight
-        String responseBody = flightsPage.asString();
-        String cheapestFlightId = responseBody.split("Choose This Flight")[0].split("flight=")[1].split("\"")[0];
-        System.out.println("Choosing flight ID: " + cheapestFlightId);
+        // 3. Extract a flight ID using regex (safe method)
+        Pattern flightIdPattern = Pattern.compile("flight=(\\d+)");
+        Matcher matcher = flightIdPattern.matcher(flightsHtml);
 
-        // 4. Select that flight (GET request to purchase page)
+        String flightId = null;
+        if (matcher.find()) {
+            flightId = matcher.group(1);
+            System.out.println("Choosing flight ID: " + flightId);
+        } else {
+            Assert.fail("No flight ID found in the response.");
+        }
+
+        // 4. Load the purchase page with the selected flight
         Response purchasePage = given()
-                .queryParam("flight", cheapestFlightId)
+                .queryParam("flight", flightId)
                 .when()
                 .get("/purchase.php");
+
         Assert.assertTrue(purchasePage.asString().contains("Your flight from"));
         System.out.println("Purchase page loaded.");
 
-        // 5. Submit passenger details and purchase
+        // 5. Submit passenger details and confirm booking
         Response confirmationPage = given()
                 .formParam("inputName", "John Doe")
                 .formParam("address", "123 Main St")
